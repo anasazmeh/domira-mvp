@@ -140,6 +140,16 @@ cd backend && pytest tests/ -v
 cd frontend && npm run build
 ```
 
+## 🚀 Deployment & Continuous Integration
+
+This project uses **GitHub Actions** for fully automated CI/CD.
+
+- **Pipeline**: [View Pipeline Guide](.github/CICD_SETUP.md)
+- **Infrastructure**: Provisioned via Terraform (`infra/terraform`)
+- **Services**: Deployed to Google Cloud Run
+
+> **Setup Required**: You must configure the required GitHub Secrets to enable the pipelines. See [CICD_SETUP.md](.github/CICD_SETUP.md) for details.
+
 ## 📄 License
 
 MIT License - See LICENSE file for details.
