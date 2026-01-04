@@ -1,0 +1,112 @@
+# Terraform Infrastructure Workflow
+# Provisions/updates GCP infrastructure
+
+name: Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action (plan or apply)'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: '1.6.0'
+  WORKING_DIR: 'infra/terraform'
+  GCP_REGION: 'europe-west4'
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ env.GCP_REGION }}
+          TF_VAR_stripe_api_key: ${{ secrets.STRIPE_API_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_eth_rpc_url: ${{ secrets.ETH_RPC_URL }}
+          TF_VAR_contract_address: ${{ secrets.CONTRACT_ADDRESS }}
+          TF_VAR_admin_private_key: ${{ secrets.ADMIN_PRIVATE_KEY }}
+
+      - name: Terraform Apply
+        if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform destroy -auto-approve
+        env:
+          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ env.GCP_REGION }}
+          TF_VAR_stripe_api_key: ${{ secrets.STRIPE_API_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_eth_rpc_url: ${{ secrets.ETH_RPC_URL }}
+          TF_VAR_contract_address: ${{ secrets.CONTRACT_ADDRESS }}
+          TF_VAR_admin_private_key: ${{ secrets.ADMIN_PRIVATE_KEY }}
+
+      - name: Save Terraform Outputs
+        if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply'))
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          echo "BACKEND_URL=$(terraform output -raw backend_url)" >> $GITHUB_ENV
+          echo "FRONTEND_URL=$(terraform output -raw frontend_url)" >> $GITHUB_ENV
+
+      - name: Print Deployment URLs
+        if: success()
+        run: |
+          echo "### Infrastructure Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend API | ${{ env.BACKEND_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ env.FRONTEND_URL }} |" >> $GITHUB_STEP_SUMMARY

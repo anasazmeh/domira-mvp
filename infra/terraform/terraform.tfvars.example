@@ -1,0 +1,17 @@
+# Example Terraform Variables
+# Copy to terraform.tfvars and fill in your values
+
+project_id = "your-gcp-project-id"
+region     = "europe-west4"  # Netherlands
+image_tag  = "latest"
+
+# Frontend URL (update after first deployment)
+frontend_url = "https://domira-frontend-xxxxx.run.app"
+
+# Secrets (use terraform.tfvars or environment variables)
+# These are sensitive - don't commit actual values!
+stripe_api_key        = "sk_test_..."
+stripe_webhook_secret = "whsec_..."
+eth_rpc_url           = "https://rpc.sepolia.org"
+contract_address      = "0x..."
+admin_private_key     = "0x..."
